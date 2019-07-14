@@ -23,9 +23,10 @@ if $*[0].nil? or $*[0] == '-u' # 排除直接执行脚本的情况 (ipgw <*.rb> 
   print HELPOPTS + "\n\n" if __FILE__ == $0 and $*[0] != '-e' and $*[0] != '-u' # 排除 require 的情况
 end
 
-# 根据 Mac 地址加密数据, 使之仅能在本机上读取
+# Linux 根据 Mac 地址加密数据, 使之仅能在本机上读取
 # 另一种获得 UUID 的方法是读取 /var/lib/dbus/machine-id
 # 但并不是所有 Linux 机都装有 dbus, 因此作罢
+# Mac OS 则是可以 ioreg 获得硬盘唯一序列号
 $uuid = ''
 begin
   for i in Dir.entries '/sys/class/net/'
@@ -35,11 +36,15 @@ begin
       next
     end
   end
-  raise if $uuid.empty?
+  raise if $uuid.empty? # 不足以 \0 补齐, 太多则截取前 32 位
   $uuid = $uuid.ljust(32, '0')[0, 32]
 rescue
-  $stderr.puts "\e[31;1m加/解密所需基于 Mac 地址的唯一标识符获取失败 (RuntimeError)\e[0m"
-  exit
+  begin
+    $uuid = `ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null | grep -E '(UUID)'`.split('"')[3].delete('-')
+  rescue
+    $stderr.puts "\e[31;1m加/解密所需基于 Mac 地址或设备硬件序列号的唯一标识符获取失败 (RuntimeError)\e[0m"
+    exit
+  end
 end
 
 require 'openssl'

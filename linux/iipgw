@@ -5,10 +5,10 @@
 
 require 'irb'
 require 'irb/completion'
-load 'ipgw'
+load File.join(File.dirname(__FILE__), 'ipgw')
 
 # 使用 Readline 模块将支持方向键控制、自动补全等特性
-# 但在某些终端模拟器中方向键/中文输入有问题, 且响应较慢
+# 但中文输入有问题
 $use_readline = true
 def change_useReadline
   $use_readline = !$use_readline
@@ -35,6 +35,20 @@ module IRB
       :PROMPT_C => "\e[34;1m%N #%03n >* \e[0m",
       :RETURN => "\e[34;1m=> \e[0m%s\n\n"
     }
+  end
+
+  # Readline 模块在计算字符串长度时会多计入 ANSI 控制符 (实际不可见), 导致移动光标时出 bug
+  # 因此这里要匀一下, 把一部分字符先打印出来
+  # 实际上更高 Ruby 版本解决了这个 bug, 但 Mac OS 内置的 Ruby 2.0 还有问题
+  class ReadlineInputMethod
+    alias _gets gets
+    def gets
+      unless RUBY_VERSION.to_f > 2.1 or @prompt[0, 2] == '=>'
+        print @prompt[0, 13] # 为什么是 13? 理论上应该是 11 (多出 11 个 ANSI 控制符)
+        @prompt = @prompt[13..-1]
+      end
+      _gets
+    end
   end
 end
 
