@@ -1,0 +1,273 @@
+#!/usr/bin/env ruby
+# encoding: UTF-8
+# 请使用 Ruby 2+ 版本, 否则无法正常运行
+
+# 数据结构: $users_enc = [[初始向量 IV, 用户名数据 (USERNM 用 \0 补足后与 IV 进行异或位运算), \
+# 密码加密块 (由 PASSWD 根据 KEY = UUID & USERNM 进行 AES-CBC-256 加密得到)]]
+# 所有字符串数据均以十六进制存储 (e.g. "\x07\xff" => '07ff')
+$users_enc = []
+# 请勿改动上一行任何字符. 每次存储用户名/密码信息时都会对其自动进行改写 (记录加密信息)
+
+VERSION_ = 'IPGW 2.0.1 [Jul 20 2019, by Zack Sun] on Linux'
+HELPINFO = '基于 Ruby 2+ 的 Linux 平台北京大学网关连接命令行界面 (CLI) 程序, 支持 Ruby 语言自定义连接脚' +
+           '本, 可参考样例 ensure_conn. IPGW 类内置函数有 save_cred [设置用户名密码], setProxy [代理设置], ' +
+           'connection [网关操作], lastErr [最后错误信息], users [用户列表] 等可供调用. 具体用法参见注释及样例.' 
+HELPOPTS = "选项:\t-e <\"script\">\t执行单行 Ruby 脚本;\n" +
+           "\t-u\t\t设置网关用户名密码;\n" +
+           "\t<*.rb>\t\t执行指定的 Ruby 文件;\n" +
+           "\t(无传入参数)\t显示本帮助并执行标准输入 (STDIN) 中的 Ruby 代码, 读取以 EOF (^D) 结束."
+
+print "\e]0;#{VERSION_}\a" # 终端标题
+if $*[0].nil? or $*[0] == '-u' # 排除直接执行脚本的情况 (ipgw <*.rb> 和 ipgw -e <script>)
+  print HELPINFO + "\n\n"
+  print HELPOPTS + "\n\n" if __FILE__ == $0 and $*[0] != '-e' and $*[0] != '-u' # 排除 require 的情况
+end
+
+# 根据 Mac 地址加密数据, 使之仅能在本机上读取
+# 另一种获得 UUID 的方法是读取 /var/lib/dbus/machine-id
+# 但并不是所有 Linux 机都装有 dbus, 因此作罢
+$uuid = ''
+begin
+  for i in Dir.entries '/sys/class/net/'
+    begin
+      open('/sys/class/net/' + i + '/address') {|f| $uuid += f.read.scan(/\w\w/).join}
+    rescue
+      next
+    end
+  end
+  raise if $uuid.empty?
+  $uuid = $uuid.ljust(32, '0')[0, 32]
+rescue
+  $stderr.puts "\e[31;1m加/解密所需基于 Mac 地址的唯一标识符获取失败 (RuntimeError)\e[0m"
+  exit
+end
+
+require 'openssl'
+require 'io/console'
+require 'net/https'
+# 采用新版网关 API, 参考如下:
+# https://blog.yangl1996.com/post/pku-its-api-spec/
+# https://github.com/PKUHelper/pkuipgw
+class IPGW
+  attr_reader :lastErr # 最后错误信息
+  attr_reader :proxy   # 代理设置
+  def initialize
+    @lastErr = ''
+    # 类变量, 不允许公有读取
+    @@http = Net::HTTP.new('its.pku.edu.cn', 443)
+    @@req = Net::HTTP::Post.new('/cas/ITSClient', initheader={'User-Agent' => 'IPGWiOS1.2_'})
+    @@store = OpenSSL::X509::Store.new
+    @@store.add_cert(OpenSSL::X509::Certificate.new(
+"DigiCert Global Root CA
+=======================
+-----BEGIN CERTIFICATE-----
+MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBhMQswCQYDVQQG
+EwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29tMSAw
+HgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBDQTAeFw0wNjExMTAwMDAwMDBaFw0zMTExMTAw
+MDAwMDBaMGExCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3
+dy5kaWdpY2VydC5jb20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IENBMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4jvhEXLeqKTTo1eqUKKPC3eQyaKl7hLOllsBCSDMAZOn
+TjC3U/dDxGkAV53ijSLdhwZAAIEJzs4bg7/fzTtxRuLWZscFs3YnFo97nh6Vfe63SKMI2tavegw5
+BmV/Sl0fvBf4q77uKNd0f3p4mVmFaG5cIzJLv07A6Fpt43C/dxC//AH2hdmoRBBYMql1GNXRor5H
+4idq9Joz+EkIYIvUX7Q6hL+hqkpMfT7PT19sdl6gSzeRntwi5m3OFBqOasv+zbMUZBfHWymeMr/y
+7vrTC0LUq7dBMtoM1O/4gdW7jVg/tRvoSSiicNoxBN33shbyTApOB6jtSj1etX+jkMOvJwIDAQAB
+o2MwYTAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUA95QNVbRTLtm
+8KPiGxvDl7I90VUwHwYDVR0jBBgwFoAUA95QNVbRTLtm8KPiGxvDl7I90VUwDQYJKoZIhvcNAQEF
+BQADggEBAMucN6pIExIK+t1EnE9SsPTfrgT1eXkIoyQY/EsrhMAtudXH/vTBH1jLuG2cenTnmCmr
+EbXjcKChzUyImZOMkXDiqw8cvpOp/2PV5Adg06O/nVsJ8dWO41P0jmP6P6fbtGbfYmbW0W5BjfIt
+tep3Sp+dWOIrWcBAI+0tKIJFPnlUkiaY4IBIqDfv8NZ5YBberOgOzW6sRBc4L0na4UU+Krk2U886
+UAb3LujEV0lsYSEY1QSteDwsOoBrp+uvFRTp2InBuThs4pFsiv9kuXclVzDAGySj4dzp30d8tbQk
+CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
+-----END CERTIFICATE-----"))
+    setProxy(nil) # 初始化
+
+    users = [] # [用户, 密码] 对
+    # 将密码信息严格限定在 IPGW 类的初始化函数中, 并通过动态定义函数的方式传递给其他可信的方法
+    # 因为即使是定义为类变量, 且不允许修改类函数, 也可以通过类似 `class IPGW; p @@users end` 的代码泄露
+    define_singleton_method(:initCredentialMethods) do |usersNew, append=true|
+      users = [] unless append
+      users += usersNew
+      # 只返回用户名而不返回密码, 或只返回个数 (getLenOnly=true)
+      define_singleton_method(:users) do |getLenOnly=false|
+        getLenOnly ? users.size : users.map {|i| i[0]}
+      end
+
+      define_singleton_method(:connection) do |*argv| begin
+        # 欲操作网关的用户编号 / 具体操作 (见下) / 欲断开的 IP / 超时
+        id, opr, ip_d, timeout = *argv
+        id = 0 if id.nil?
+        opr = 0 if opr.nil?
+        timeout = 5 if timeout.nil?
+        @@http.open_timeout = @@http.read_timeout = timeout
+        case opr
+          when 1
+            params = {'cmd' => 'getconnections'}
+          when 2
+            params = {'cmd' => 'disconnect', 'ip' => ip_d}
+          when -1
+            params = {'cmd' => 'close'}
+          when -2
+            params = {'cmd' => 'closeall'}
+          else
+            params = {'cmd' => 'open', 'iprange' => 'fee'}
+        end
+        params.merge!({'username' => users[id][0], 'password' => users[id][1]})
+        $stderr.puts "\e[33;1m执行连接选项:\e[0m #{params['cmd']}('#{ip_d}')@'#{params['username']}'"
+        req = @@req.clone # 避免泄露, 改用局部变量
+        req.set_form_data(params)
+        res = @@http.request(req)
+        body = res.body.force_encoding 'UTF-8'
+        if res.is_a?(Net::HTTPOK)
+          if body.include?('"succ"') # 执行成功
+            if opr.zero?
+              body.scan(/CONNECTIONS.*?(\d+).*BALANCE.*?(\d.*\d)".*IP.*?"(\d.*\d)"/)[0]
+              # [连接数, 余额, IP], e.g. [3, 0.0, 10.128.171.106]
+            elsif opr == 1
+              body.scan(/(\d+\.\d+\.\d+\.\d+);.*?;(.*?);(\d+-\d+-\d+\s*\d+:\d+:\d+)/)
+              # [[IP, 地点, 时间]], e.g. [[10.2.13.70, 31楼, 2019-07-03 22:01:35], [10.2.17.26, 31楼, 2019-06-23 20:41:40]
+            elsif opr == 2; ip_d
+            else true end
+          else
+            $stderr.puts "\e[31;1m网关返回错误:\e[0m #{(@lastErr = body.scan(/":"(.*)"/)[0][0])} (RuntimeError)"
+            false # 网页错误信息, 设置 LastError
+          end
+        else raise('状态码响应异常: ' + res.class.to_s) end
+      rescue StandardError, Timeout::Error
+        $stderr.puts "\e[31;1m网络连接失败:\e[0m " + errMsg
+        false
+      end end
+      nil # 返回
+    end
+
+    usersNew = []
+    begin
+      raise if $users_enc.empty?
+      for i in $users_enc
+        aes = OpenSSL::Cipher::AES.new(256, :CBC)
+        aes.decrypt
+        aes.iv = (iv = [i[0]].pack('H*'))
+        iv = iv.unpack('C*')
+        usernm = ''
+        (0..15).each {|j| usernm += [i[1][2*j, 2].hex ^ iv[j]].pack('C')}
+        aes.key = ([$uuid].pack('H*') + usernm)
+        # 添加一对 [用户, 密码]
+        usersNew << [usernm.rstrip, aes.update([i[2]].pack('H*')) << aes.final]
+      end
+      initCredentialMethods usersNew
+    rescue
+      $stderr.puts("\e[31;1m#{@lastErr = '用户数据读取失败, 或未存储过相关信息 (RuntimeError)'}\e[0m") unless $*[0] == '-u'
+      puts "\e[33;1m按任意开始存储用户/密码信息, 或直接按 Ctrl+C 结束\e[0m"
+      exit if STDIN.getch == "\x03"
+      $users_enc = [] # 覆盖模式
+      save_cred
+    end
+  end
+  # 占位符, 之后还会重新动态定义
+  def users(getLenOnly=false); return(getLenOnly ? 0 : []) end
+
+  def save_cred # 设置用户名密码
+    usrLen = self.users(true)
+    usersNew = []
+    unless usrLen.zero?
+      print "\e[33;1m已有 #{usrLen} 组用户/密码记录, 启用 追加(\e[4mA\e[24m) / 覆盖(\e[4mO\e[24m) 模式?\e[0m [A/O] "
+      if STDIN.getch.downcase == 'o' 
+        puts ": 启用覆盖模式"; usrLen = 0; $users_enc = []; append = false
+      else
+        puts ": 启用追加模式"; append = true
+      end
+    end
+
+    loop do
+      begin
+        puts; puts "Entry ##{usrLen += 1} (在账号栏直接回车或在密码栏按 Ctrl-C 以结束)"
+        print "\e[1;33m  账号: \e[0m"
+        usernm = STDIN.gets.chomp
+        if usernm.empty? then print "\e[1A"; raise Interrupt end
+        print "\e[1;33m  密码: \e[0m"
+
+        # 以黑圈代替密码字符 (以替代不回显的用户不友好的默认方案)
+        # 不过现在还有些小问题
+        passwd = ''
+        loop do
+          c = STDIN.getch
+          case c
+            when "\x03"; passwd = ''; break # Ctrl-C 取消
+            when "\r", "\n"; puts; break # 回车
+            when "\e"; STDIN.getch if STDIN.getch == '['; print "\a\r\e[K\e[1;33m  密码: \e[0m"; passwd = ''; next # 暂不支持方向键 (\e[A/B/C/D), 响铃, 重来
+            when "\b", "\x7f"; next if passwd.empty?; print "\b \b"; passwd.chop! # 删除
+          else; passwd += c; print '●'
+          end
+        end
+
+        if passwd.empty? then print "\r\e[2A\e[J"; usrLen -= 1; break end # 上移两行并清空下文
+        usersNew << [usernm, passwd]
+      rescue Interrupt
+        print "\r\e[1A\e[J"; usrLen -= 1; break # 上移一行并清空下文
+      end
+
+      # 进行加密计算
+      aes = OpenSSL::Cipher::AES.new(256, :CBC)
+      aes.encrypt
+      usernm = usernm.ljust(16, "\0")
+      aes.key = ([$uuid].pack('H*') + usernm)
+      iv = aes.random_iv
+      encData = iv.unpack('H*')
+      encData.push ''
+      usernm = usernm.unpack('C*')
+      iv = iv.unpack('C*')
+      (0..15).each {|i| encData[1] += '%02x' % (usernm[i] ^ iv[i])}
+      enc = aes.update(passwd) << aes.final
+      encData += enc.unpack('H*')
+      $users_enc << encData
+    end
+    exit if usrLen.zero?
+    if usersNew.empty? then exit if $*[0] == '-u'; return end
+    # 把加密信息写入本文件
+    codes = open(__FILE__) {|f| f.readlines}
+    for i in 0...codes.size
+      # 找到定义 $users_enc 的那一行并替换
+      if codes[i].match(/^\s*\$users_enc\s*=\s*\[.*\]\s*$/) then codes[i] = "$users_enc = #{$users_enc.inspect}\n"; break end
+    end
+    open(__FILE__, 'w') {|f| f.write(codes.join)}
+    exit if $*[0] == '-u'
+    initCredentialMethods(usersNew, append)
+  end
+
+  def errMsg() # 错误信息
+    return @lastErr = ($!.to_s + " (#{$!.class})\n\tfrom #{$@.join "\n\tfrom "}") # LastError
+  end
+
+  def setProxy(addr, port=nil, user=nil, pass=nil) # 设置代理
+    proxy = @proxy; http = @@http
+    if proxy.nil? # 初始化
+      @proxy = Net::HTTP::Proxy(nil)
+      # 不更改 @@http 初始值
+    else
+      @proxy = Net::HTTP::Proxy(addr, port, user, pass)
+      @@http = @proxy.new('its.pku.edu.cn', 443)
+      $stderr.puts "\e[33;1m设置代理地址:\e[0m \"" + (addr.nil? ? '无"' : (user.to_s + '"@' + addr + (port.nil? ? '':":#{port}")))
+    end
+    @@http.use_ssl = true
+    @@http.cert_store = @store # 根证书验证
+    @@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+    return true
+  rescue
+    @proxy = proxy; @@http = http
+    $stderr.puts "\e[31;1m代理设置失败:\e[0m " + errMsg
+    return false
+  end
+
+  # https://stackoverflow.com/a/21843709
+  def self.method_added(name)
+    # 仅允许在初始化时添加 users 和 connection 这两个方法
+    raise(NameError, '鉴于安全性问题, 禁止更新 IPGW 类中的初始化方法') unless name == :users or name == :connection
+  end
+  def self.inherited(subclass); raise(NameError, '鉴于安全性问题, 禁止继承 IPGW 类') end
+end
+
+case $*[0] # 执行自定义脚本
+  when '-e'; eval $*[1] # <path/to/>ipgw -e "connection 0,0"
+  when '-u'; IPGW.new.save_cred
+  when nil; eval(gets(sep=nil)) if __FILE__ == $0 # 排除 require/load 的情况
+  else f = File.exist?($*[0]) ? $*[0] : '(eval)'; eval(gets(sep=nil), TOPLEVEL_BINDING, f) # <path/to/>ipgw <script.rb>
+end

@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# encoding: UTF-8
+# 请使用 Ruby 2+ 版本, 否则无法正常运行
+# Interactive IPGW: 以交互模式执行连接网关的 Ruby 脚本
+
+require 'irb'
+require 'irb/completion'
+load 'ipgw'
+
+# 使用 Readline 模块将支持方向键控制、自动补全等特性
+# 但在某些终端模拟器中方向键/中文输入有问题, 且响应较慢
+$use_readline = true
+def change_useReadline
+  $use_readline = !$use_readline
+  puts "目前#{'不' unless $use_readline}使用 Readline 模块. 可随时调用预存的历史命令 change_useReadline 更改该状态."
+  IRB.CurrentContext.io = ($use_readline ? IRB::ReadlineInputMethod : IRB::StdioInputMethod).new
+end
+
+print '启动交互式命令行界面. 预先定义 @i 为已初始化的 IPGW 类. 按 [↑/↓] 方向键可以调用历史命令, 其中预存有 @i.connection 及 @i.save_cred 等常用命令供快捷调用. 按 TAB 以实现自动补全提示. '
+puts "目前#{'不' unless $use_readline}使用 Readline 模块. 可随时调用预存的历史命令 change_useReadline 更改该状态."; puts
+
+IRB.singleton_class.send(:alias_method, :_setup, :setup) # 假名
+# IRB.start 的坑爹之处在于不管之前如何设置了 IRB.conf,
+# 之后都会重新初始化 (irb/init), 所以得重写 IRB.setup 方法
+# 之所以不改写 IRB.start 是因为 Ruby 2.x 各版本之间变动太大
+module IRB
+  def IRB.setup(*argv)
+    IRB._setup(*argv)
+    @CONF[:IRB_NAME] = 'iIPGW'
+    @CONF[:USE_READLINE] = $use_readline
+    @CONF[:PROMPT][:DEFAULT] = {
+      :PROMPT_I => "\e[34;1m%N #%03n >> \e[0m",
+      :PROMPT_N => "\e[34;1m%N #%03n >| \e[0m",
+      :PROMPT_S => "\e[34;1m%N #%03n >%l \e[0m",
+      :PROMPT_C => "\e[34;1m%N #%03n >* \e[0m",
+      :RETURN => "\e[34;1m=> \e[0m%s\n\n"
+    }
+  end
+end
+
+# 预先初始化 IPGW 类
+puts "\e[34;1miIPGW #000 >> \e[0m@i = IPGW.new"
+@i = IPGW.new
+puts "\e[34;1m=> \e[0m%s\n\n" % @i.inspect
+
+# 预先添加代码历史记录以方便快速调用
+Readline::HISTORY.push('change_useReadline', '@i.save_cred', '@i.connection ')
+IRB.start(__FILE__)
