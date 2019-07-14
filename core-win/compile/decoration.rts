@@ -1,0 +1,19 @@
+Sub Main
+  PEFileProxy.UpdateCheckSum = True
+  PEFileProxy.CreateBackUp = False
+  LangID = 0
+  CP = ScriptUnit.CodePageFromLangID(LangID)
+  If (PEFileProxy.OpenFileEx (".\ipgw_core.exe", True)) Then
+    ResourcesProxy.ChangeManifest EXE_MANIFEST, LangID, CREATE_IF_NOT_EXIST, ".\src\1.xml"
+    ResourcesProxy.ChangeIcon "101", LangID, CREATE_IF_NOT_EXIST, REPLACE_IF_ITEM_EXISTS_ELSE_ADD, ".\src\101.ico"
+    ResourcesProxy.ChangeIcon "102", LangID, CREATE_IF_NOT_EXIST, REPLACE_IF_ITEM_EXISTS_ELSE_ADD, ".\src\102.ico"
+    ResourcesProxy.ChangeIcon "103", LangID, CREATE_IF_NOT_EXIST, REPLACE_IF_ITEM_EXISTS_ELSE_ADD, ".\src\103.ico"
+    ResourcesProxy.ChangeIcon "104", LangID, CREATE_IF_NOT_EXIST, REPLACE_IF_ITEM_EXISTS_ELSE_ADD, ".\src\104.ico"
+    ResourcesProxy.ResourceTreeToLog
+    PEFileProxy.SaveAsNewImage "..\ipgw_core.exe"
+    PEFileProxy.CloseFile
+  Else
+    PEFileProxy.PostDebugString "Fatal error when opening this file."
+  End If
+
+End Sub
