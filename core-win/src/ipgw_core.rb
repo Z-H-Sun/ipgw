@@ -77,6 +77,7 @@ class IPGW
       # 添加一对 [用户, 密码]
       users << [usernm.rstrip, aes.update(f.read(f.read(2).unpack('S')[0])) << aes.final]
     end
+    f.close
     raise if users.empty?
 
     # 只返回用户名而不返回密码, 或只返回个数 (getLenOnly=true)

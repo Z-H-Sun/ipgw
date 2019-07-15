@@ -54,6 +54,7 @@ class IPGW
       aes.key = ([$uuid].pack('H*') + usernm)
       users << [usernm.rstrip, aes.update(f.read(f.read(2).unpack('S')[0])) << aes.final]
     end
+    f.close
     raise if users.empty?
     IPGW.define_method(:users) do |*getLenOnly|
       getLenOnly.first ? users.size : users.map {|i| i[0]}

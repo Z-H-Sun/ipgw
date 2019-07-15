@@ -93,7 +93,7 @@ def draw(opr, result=nil) # 0=连接, -1/1/2=断开指定/本机/所有, 3=失败, 4=程序
   Win32API.new('gdi32','SetDCBrushColor','ll','l').call(@hDc, 0x800000)
   FrmRct.call(@hDc, [@x, @y, @x + 120, @y + height].pack('l4'), @hBr)
   FrmRct.call(@hDc, [@x + 1, @y + 1, @x + 119, @y + height - 1].pack('l4'), @hBr)
-  DrwIco.call(@hDc, @x + 10, @y + 10, @hIco[[0, 1, 1, 2, 3][opr]])
+  DrwIco.call(@hDc, @x + 10, @y + 10, @hIco[[0, 1, 1, 2, 3, 1][opr]])
   if opr.zero?
     # GBK
     DrwTxt.call(@hDc, "已连接网关\n  (共 #{result[0]} 个)", -1, [@x + 48, @y + 10, @x + 120, @y + 50].pack('l4'), 0)
