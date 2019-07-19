@@ -26,7 +26,7 @@ begin # 根据 Windows UUID 加密数据, 使之仅能在本机上读取
   wmi = locator.ConnectServer(".", "/root/cimv2")
   wmi.ExecQuery("Select * from Win32_ComputerSystemProduct").each {|i| $uuid = i.UUID.delete('-')[0, 32]}
 rescue
-  raise '加/解密所需唯一标识符 Win32 UUID 获取失败 (RuntimeError)'
+  raise '加/解密所需唯一标识符 Win32 UUID 获取失败'
 end
 
 # 获取应用程序所在目录以定位 users.profile, ca.cer
@@ -42,7 +42,7 @@ begin
   $appDir = File.dirname(__FILE__)
   $appDir = File.dirname(buf[0, len]) if $appDir == '.'
 rescue
-  raise "获取应用程序目录失败, 错误代码 #{err} (RuntimeError)"
+  raise "获取应用程序目录失败, 错误代码 #{err}"
 end
 
 # 动态定义函数, Ruby 1.8.7 不支持, 强制公有化

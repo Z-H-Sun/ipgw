@@ -21,7 +21,7 @@ begin
   wmi = locator.ConnectServer(".", "/root/cimv2")
   wmi.ExecQuery("Select * from Win32_ComputerSystemProduct").each {|i| $uuid = i.UUID.delete('-')[0, 32]}
 rescue
-  raise '加/解密所需唯一标识符 Win32 UUID 获取失败 (RuntimeError)'
+  raise '加/解密所需唯一标识符 Win32 UUID 获取失败'
 end
 begin
   buf = "\0" * 255
@@ -31,7 +31,7 @@ begin
   $appDir = File.dirname(__FILE__)
   $appDir = File.dirname(buf[0, len]) if $appDir == '.'
 rescue
-  raise "获取应用程序目录失败, 错误代码 #{err} (RuntimeError)"
+  raise "获取应用程序目录失败, 错误代码 #{err}"
 end
 class Class; public :define_method end
 class IPGW
