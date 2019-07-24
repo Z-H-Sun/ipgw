@@ -8,7 +8,7 @@
 $users_enc = []
 # 请勿改动上一行任何字符. 每次存储用户名/密码信息时都会对其自动进行改写 (记录加密信息)
 
-VERSION_ = 'IPGW 2.0.1 [Jul 20 2019, by Zack Sun] on Linux'
+VERSION_ = 'IPGW 2.0.1 [Jul 24 2019, by Zack Sun] on Linux'
 HELPINFO = '基于 Ruby 2+ 的 Linux 平台北京大学网关连接命令行界面 (CLI) 程序, 支持 Ruby 语言自定义连接脚' +
            '本, 可参考样例 ensure_conn. IPGW 类内置函数有 save_cred [设置用户名密码], setProxy [代理设置], ' +
            'connection [网关操作], lastErr [最后错误信息], users [用户列表] 等可供调用. 具体用法参见注释及样例.' 
@@ -133,7 +133,7 @@ CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
             elsif opr == 2; ip_d
             else true end
           else
-            $stderr.puts "\e[31;1m网关返回错误:\e[0m #{(@lastErr = body.scan(/":"(.*)"/)[0][0])} (RuntimeError)"
+            $stderr.puts "\e[31;1m网关返回错误:\e[0m #{(@lastErr = body.scan(/":"(.*?)"/)[0][0])} (RuntimeError)"
             false # 网页错误信息, 设置 LastError
           end
         else raise('状态码响应异常: ' + res.class.to_s) end

@@ -1,4 +1,4 @@
-VERSION_ = 'IPGW_Core 2.0.1 [Jul 20 2019, by Zack Sun] on Win32'
+VERSION_ = 'IPGW_Core 2.0.1 [Jul 24 2019, by Zack Sun] on Win32'
 HELPINFO = '基于 Ruby 1.8.7 的北京大学网关连接命令行界面 (CLI) 程序, 支持 Ruby 语言自定义连接脚本, ' +
            '可参考 examples 文件夹. IPGW 类内置函数有 setProxy [代理设置], connection [网关操作], ' +
            'lastErr [最后错误信息], users [用户列表] 等可供调用. 具体用法参见源代码注释及样例脚本.' + 
@@ -92,7 +92,7 @@ class IPGW
           elsif opr == 2; ip_d
           else true end
         else
-          $stderr.puts '网关返回错误: ' + (@lastErr = body.scan(/":"(.*)"/)[0][0]) + ' (RuntimeError)'
+          $stderr.puts '网关返回错误: ' + (@lastErr = body.scan(/":"(.*?)"/)[0][0]) + ' (RuntimeError)'
           false
         end
       else raise('状态码响应异常: ' + res.class.to_s) end
