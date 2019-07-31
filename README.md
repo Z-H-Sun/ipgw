@@ -96,6 +96,12 @@ Linux系统则需要先手动安装Ruby：`sudo apt install ruby-full`（当然n
 
 虽然`iipgw`基本上能满足大部分定制需求，但如果需要更改`ipgw`的代码，请勿修改对`$users_enc`（加密的用户名密码信息）赋值的那一行。每次设置用户名密码后，程序会自动储存/修改其赋值。手动修改可能会导致程序不能正确运行。
 
+## 为什么选择 Ruby？
+* 较小的解释器体积（相较于Python环境）
+* 预装于Mac OS X
+* 解释性语言，可以不经编译轻松实现交互、方便功能扩展
+* 语法灵活易学，功能强大
+
 ## 命令行参数
 
 直接双击打开`ipgw_core.exe`或`ipgw`，将显示帮助信息，随后程序将读取用户的标准输入(STDIN)直至EOF(Win=Ctrl-Z, Mac/Linux=Ctrl-D)，并将其作为Ruby代码执行。执行`ipgw_core.exe <*.rb>`或`ipgw <*.rb>`相当于将*.rb的文件内容重定向至STDIN，程序将执行文件中的Ruby代码（此时不显示帮助信息）。`ipgw_core.exe -e "some_script"`或`ipgw -e "some_script"`可执行单行Ruby代码。
